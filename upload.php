@@ -1,71 +1,46 @@
 <?php
 include("dbcon.php");
-session_start();
 
-// Create the uploads directory if it doesn't exist
-$targetDir = "uploads/";
-if (!file_exists($targetDir)) {
-    mkdir($targetDir, 0777, true);
-}
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Handle file uploads and insert data into the database
+    $name = $_POST['name'];
+    $email = $_POST['email'];
 
-// Initialize variables
-$profilePictureName = "";
-$documentNames = [];
+    // Handle profile picture upload
+    $profilePicture = $_FILES['profilepicture']['name'];
+    $profilePictureTmp = $_FILES['profilepicture']['tmp_name'];
+    $profilePicturePath = 'uploads/' . basename($profilePicture);
+    move_uploaded_file($profilePictureTmp, $profilePicturePath);
 
-// Handle profile picture upload
-if (isset($_FILES['profilepicture']) && $_FILES['profilepicture']['error'] == UPLOAD_ERR_OK) {
-    $profileExtension = pathinfo($_FILES['profilepicture']['name'], PATHINFO_EXTENSION);
-    $profilePictureName = "dp" . rand(1, 999) . time() . "." . $profileExtension;
-    $targetFilePath = $targetDir . $profilePictureName;
-
-    if (!move_uploaded_file($_FILES['profilepicture']['tmp_name'], $targetFilePath)) {
-        $_SESSION['status'] = 'Error uploading profile picture.';
-        header('Location: index.php');
-        exit();
+    // Handle documents upload
+    $files = [];
+    foreach ($_FILES['files']['name'] as $key => $file) {
+        $filePath = 'uploads/' . basename($file);
+        move_uploaded_file($_FILES['files']['tmp_name'][$key], $filePath);
+        $files[] = $file;
     }
-}
+    $files = implode(',', $files);
 
-// Handle document uploads
-if (isset($_FILES['documents']) && is_array($_FILES['documents']['tmp_name'])) {
-    foreach ($_FILES['documents']['tmp_name'] as $key => $tmp_name) {
-        if ($_FILES['documents']['error'][$key] == UPLOAD_ERR_OK) {
-            $fileName = basename($_FILES['documents']['name'][$key]);
-            $targetFilePath = $targetDir . $fileName;
+    // Insert into the database
+    $sql = "INSERT INTO `information` (name, email, profile, files) VALUES ('$name', '$email', '$profilePicture', '$files')";
+    if ($conn->query($sql) === TRUE) {
+        // Fetch the new record
+        $id = $conn->insert_id;
+        $result = $conn->query("SELECT * FROM `information` WHERE ID = $id");
+        $newRecord = $result->fetch_assoc();
 
-            if (move_uploaded_file($tmp_name, $targetFilePath)) {
-                $documentNames[] = $fileName;
-            } else {
-                echo "Error uploading file $fileName.<br>";
-            }
-        } else {
-            echo "Error code: " . $_FILES['documents']['error'][$key] . "<br>";
-        }
-    }
-} else {
-    echo "No documents were uploaded or invalid file input.";
-}
-
-// Insert data into database
-if ($profilePictureName != "" || !empty($documentNames)) {
-    $username = $_POST['username'];
-    $rollno = $_POST['rollno'];
-    $documents = implode(",", $documentNames); // Convert array to string
-
-    $stmt = $conn->prepare("INSERT INTO images (name, rollno, profile, result) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("ssss", $username, $rollno, $profilePictureName, $documents);
-
-    if ($stmt->execute()) {
-        $_SESSION['status'] = 'Successfully Added!';
+        echo json_encode([
+            'status' => 1,
+            'message' => 'Submission added successfully',
+            'record' => $newRecord
+        ]);
     } else {
-        $_SESSION['status'] = 'Failed to upload profile picture and documents.';
+        echo json_encode([
+            'status' => 0,
+            'message' => 'Failed to add submission'
+        ]);
     }
 
-    $stmt->close();
-} else {
-    $_SESSION['status'] = 'No files were uploaded.';
+    $conn->close();
 }
-
-$conn->close();
-header('Location: index.php');
-exit();
 ?>

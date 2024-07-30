@@ -2,28 +2,21 @@
 include("dbcon.php");
 session_start();
 
-// Check if the ID parameter is set
-if (isset($_GET['id'])) {
-    $id = intval($_GET['id']);
-    $sql = "DELETE FROM `images` WHERE `ID` = ?";
-    if ($stmt = $conn->prepare($sql)) {
-        $stmt->bind_param("i", $id);
-        if ($stmt->execute()) {
-            $_SESSION['status'] = " Deleted successfully!";
-            header("Location: view.php");
-            exit();
-        } else {
-            $_SESSION['status'] = "Error deleting record: " . $conn->error;
-            header("Location: view.php");
-            exit();
-        }
+if (isset($_POST['id'])) {
+    $id = intval($_POST['id']);
+    
+    // Delete the record from the database
+    $sql = "DELETE FROM `information` WHERE ID = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('i', $id);
+
+    if ($stmt->execute()) {
+        echo json_encode(['status' => 1, 'message' => 'Record deleted successfully']);
     } else {
-        $_SESSION['status'] = "Error preparing the query: " . $conn->error;
-        header("Location: view.php");
-        exit();
+        echo json_encode(['status' => 0, 'message' => 'Failed to delete record']);
     }
-} else {
-    $_SESSION['status'] = "No ID specified!";
-    header("Location: view.php");
-    exit();
+
+    $stmt->close();
 }
+$conn->close();
+?>
